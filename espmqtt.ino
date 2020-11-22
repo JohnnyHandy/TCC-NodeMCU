@@ -9,14 +9,20 @@
 //defines:
 //defines de id mqtt e tópicos para publicação e subscribe
 #define TOPICO_LED_CONTROL "esp/led/control" //Topico usado para controlar o LED
-#define TOPICO_LED_STATUS "esp/led/status" //Topico utilizado para enviar o status do led
-#define TOPICO_LED_STATUS_GET "esp/led/status/get" //Topico utilizado para solicitar o status do Led
-#define TOPICO_PRESENCE   "presence"    //Topico utilizado para enviar presença do dispositivo
-#define TOPICO_CONNECTION_STATUS "esp/connection_status" //Topico usado para enviar o estado da conexão da ESP com a rede
-#define TOPICO_ANALOG_WRITE "esp/led/analogwrite" // Topico utilizado para controlar o valor de tensao em uma porta analógica
-#define TOPICO_BUTTON_STATUS "esp/button/status" //Topico usado para enviar o status do "botão"
-#define TOPICO_POT_CONTROL "esp/pot/control" //Topico usado para enviar o estado do potenciometro
-#define TOPICO_POT_STATUS "esp/pot/status" //Topico usado para ativar ou desativar o controle do potenciometro
+#define TOPICO_LED_SEND_STATUS "esp/led/sendStatus" //Topico utilizado para enviar o status do led
+#define TOPICO_LED_STATUS_GET "esp/led/getStatus" //Topico utilizado para solicitar o status do Led
+#define TOPICO_PRESENCE   "esp/presence"    //Topico utilizado para enviar presença do dispositivo
+#define TOPICO_CONNECTION_STATUS "esp/connection/sendStatus" //Topico usado para enviar o estado da conexão da ESP com a rede
+#define TOPICO_PWMLED_CONTROL "esp/pwmLed/control" // Topico utilizado para controlar o valor de tensao em uma porta analógica
+#define TOPICO_PWMLED_SEND_STATUS "esp/pwmLed/sendStatus" //Topico utilizado para enviar o status do led controlado por pwm
+#define TOPICO_PWMLED_GET_STATUS "esp/pwmLed/getStatus" //Topico utilizado para solicitar o valor atual de tensão do led controlado por pwm
+#define TOPICO_BUTTON_STATUS "esp/button/sendStatus" //Topico usado para enviar o status do "botão"
+#define TOPICO_POT_GET_CONTROL "esp/pot/getControl" //Topico usado para solicitar o estado do controle do potenciometro
+#define TOPICO_POT_SEND_CONTROL "esp/pot/sendControl" // Topico usado para enviar o estado do controle do potenciometro
+#define TOPICO_POT_SET_CONTROL "esp/pot/setControl" //Topico usado para alterar o estado do controle do potenciometro
+#define TOPICO_POT_STATUS "esp/pot/sendStatus" //Topico usado para ativar ou desativar o controle do potenciometro
+#define TOPICO_OVERALL_GET_STATUS "esp/overall/getStatus" // Topico usado para solicitar o estado geral das portas objetos de teste
+#define TOPICO_OVERALL_STATUS_SEND "esp/overall/sendStatus" // Topico usado para enviar o estado geral das portas
 
 #define ID_MQTT  "HomeAut"     //id mqtt (para identificação de sessão)
 
@@ -35,7 +41,7 @@
 #define D9    3
 #define D10   1
 
-int pwmLed = D4; //Led regulado por PWM através do TOPICO_ANALOG_WRITE
+int pwmLed = D4; //Led regulado por PWM através do TOPICO_PWMLED_CONTROL
 int statusLed = D3; // Led usado para testes de status
 int button = D2; // "Botão" utilizado para testes de status
 String potMode = "false"; // Status do modo de escuta de mudanças no potenciometro
@@ -60,14 +66,14 @@ void initWiFi(); // Configura conexão com wifi
 void initMQTT(); // Configura conexão MQTT
 void reconectWiFi(); // Usado para reconectar com o wi-fi
 void mqtt_callback(char* topic, byte* payload, unsigned int length); // Prototipo de função que escuta e identifica mensagens MQTT
-void VerificaConexoesWiFIEMQTT(void); // Verificação de status de conexões Wifi e MQTT
+void verifyConnections(void); // Verificação de status de conexões Wifi e MQTT
 void InitOutput(void);
-void verificaLeituraPot(void); //Verifica leitura do potenciometro caso o modo de escuta esteja ativado
-void verificaLeituraBotao(void); // Verifica status do "botão"
-void enviaStatusLed(void); //Envia o estado do led de teste de status
-void enviaStatusPot(void); //Envia o valor atual da conversão analógica-digital da tensao da entrada analogica ligada ao potenciometro
-void enviaStatusBut(void); //Envia o estado do botão de teste
-void enviaStatusConn(void); //Envia estado da conexão
+void verifyPotReading(void); //Verifica leitura do potenciometro caso o modo de escuta esteja ativado
+void verifyButton(void); // Verifica status do "botão"
+void sendLedStatus(void); //Envia o estado do led de teste de status
+void sendPotStatus(void); //Envia o valor atual da conversão analógica-digital da tensao da entrada analogica ligada ao potenciometro
+void sendButtonStatus(void); //Envia o estado do botão de teste
+void sendConnectionStatus(void); //Envia estado da conexão
 void enviaStatus(void); //Envia status geral dos objetos de teste na esp
 
 /* 
@@ -131,40 +137,32 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length)
        msg += c;
     }
     
-    String receivedTopic = String(topic); //Converteo topico recebido em uma string
+    String receivedTopic = String(topic); //Converte o topico recebido em uma string
     Serial.print(receivedTopic);
 
     //Toma ação dependendo da string recebida:
-    
-    if(receivedTopic.equals(TOPICO_POT_CONTROL)) { //Ativa o modo de escuta do potenciometro
+    if(receivedTopic.equals(TOPICO_POT_SET_CONTROL)) { //Ativa o modo de escuta do potenciometro
       potMode=msg;
     }
-    if(receivedTopic.equals(TOPICO_ANALOG_WRITE)) { //Envia valor analógico à porta de entrada analógica
-      char format[16];
-      snprintf(format, sizeof format, "%%%ud", length);
-
-      // Converte o valor contigo na mensagem para um valor inteiro
-      int payload_value = 0;
-      if (sscanf((const char *) payload, format, &payload_value) == 1){
-        analogWrite(D4, payload_value);
-      } else ;
+    if(receivedTopic.equals(TOPICO_PWMLED_CONTROL)) { //Envia valor analógico à porta de entrada analógica
+      controlPwmLed(payload, length);
     }
-    if(receivedTopic.equals(TOPICO_LED_STATUS_GET)) { //Envia o status geral da esp
+    if(receivedTopic.equals(TOPICO_OVERALL_GET_STATUS)) { //Envia o status geral da esp
       enviaStatus();
     }
-        
     if(receivedTopic.equals(TOPICO_LED_CONTROL)) { //Muda o estado do LED de acordo com a mensagem recebida
-      if (msg.equals("0")) {
-        digitalWrite(statusLed, LOW);
-        Serial.print(digitalRead(statusLed));
-        MQTT.publish(TOPICO_LED_STATUS, "0");
-      }
-      if (msg.equals("1")){
-        digitalWrite(statusLed, HIGH);
-        Serial.print(digitalRead(statusLed));
-        MQTT.publish(TOPICO_LED_STATUS, "1");
-      }
+      controlStatusLed(msg);
     }
+//      if (msg.equals("0")) {
+//        digitalWrite(statusLed, LOW);
+//        Serial.print(digitalRead(statusLed));
+//      }
+//      if (msg.equals("1")){
+//        digitalWrite(statusLed, HIGH);
+//        Serial.print(digitalRead(statusLed));
+//      }
+//      sendLedStatus();
+//    }
      
 }
   
@@ -181,11 +179,12 @@ void reconnectMQTT() {
         {
             Serial.println("Conectado com sucesso ao broker MQTT!");
             MQTT.subscribe(TOPICO_LED_CONTROL);
-            MQTT.subscribe(TOPICO_LED_STATUS_GET);
-            MQTT.subscribe(TOPICO_ANALOG_WRITE);
-            MQTT.subscribe(TOPICO_POT_CONTROL);
+            MQTT.subscribe(TOPICO_OVERALL_GET_STATUS);
+            MQTT.subscribe(TOPICO_PWMLED_CONTROL);
+            MQTT.subscribe(TOPICO_POT_SET_CONTROL);
             MQTT.publish(TOPICO_PRESENCE, "ESP CONECTADA");
-            MQTT.publish(TOPICO_CONNECTION_STATUS, "Connected");
+            sendConnectionStatus();
+//            MQTT.publish(TOPICO_CONNECTION_STATUS, "Connected");
         } 
         else
         {
@@ -226,7 +225,7 @@ void reconectWiFi()
 //        é refeita.
 //Parâmetros: nenhum
 //Retorno: nenhum
-void VerificaConexoesWiFIEMQTT(void)
+void verifyConnections(void)
 {
     if (!MQTT.connected()) 
         reconnectMQTT(); //se não há conexão com o Broker, a conexão é refeita
@@ -239,69 +238,91 @@ void VerificaConexoesWiFIEMQTT(void)
 //Retorno: nenhum
 void InitOutput(void)
 {
-    //IMPORTANTE: o Led já contido na placa é acionado com lógica invertida (ou seja,
-    //enviar HIGH para o output faz o Led apagar / enviar LOW faz o Led acender)
     pinMode(pwmLed, OUTPUT);
     pinMode(A0, INPUT); 
     pinMode(statusLed, OUTPUT);
     pinMode(button, INPUT_PULLUP);    
 }
 
-void verificaLeituraBotao(void) {
+void controlStatusLed(String msg) {
+    if (msg.equals("0")) {
+      digitalWrite(statusLed, LOW);
+      Serial.print(digitalRead(statusLed));
+    }
+    if (msg.equals("1")){
+      digitalWrite(statusLed, HIGH);
+      Serial.print(digitalRead(statusLed));
+    }
+    sendLedStatus();
+}
+
+void controlPwmLed(byte* payload, unsigned int length) {
+    char format[16];
+    snprintf(format, sizeof format, "%%%ud", length);
+
+    // Converte o valor contigo na mensagem para um valor inteiro
+    int payload_value = 0;
+    if (sscanf((const char *) payload, format, &payload_value) == 1){
+      analogWrite(pwmLed, payload_value);
+    } else ;
+}
+
+void verifyButton(void) {
   if(digitalRead(button) == LOW) {
-   MQTT.publish(TOPICO_BUTTON_STATUS, "1");
-    // Wait for the button to be released
+    sendButtonStatus();
     while(digitalRead(button) == LOW) {
       delay(100);    
     }
-
-    // Publish a button pushed message to a topic
-    MQTT.publish(TOPICO_BUTTON_STATUS, "0");
-
+    sendButtonStatus();
   }
 }
 
-void verificaLeituraPot(void){
+void verifyPotReading(void){
   if(potMode.equals("true")){
     Serial.print("ADC Value: ");Serial.println(analogRead(A0));
-    int num = analogRead(A0);
-    char cstr[16];
-    itoa(num, cstr, 10);
-    MQTT.publish(TOPICO_POT_STATUS, cstr);
+    sendPotStatus();
     delay(500);
   }
 }
 
-void enviaStatusLed(void) {
+void sendLedStatus(void) {
    int num = digitalRead(statusLed);
   char cstr[16];
   itoa(num, cstr, 10);
-  MQTT.publish(TOPICO_LED_STATUS, cstr);
+  MQTT.publish(TOPICO_LED_SEND_STATUS, cstr);
 }
 
-void enviaStatusPot(void) {
+void sendPotStatus(void) {
   int num2 = analogRead(A0);
   char cstr2[16];
   itoa(num2, cstr2, 10);
   MQTT.publish(TOPICO_POT_STATUS, cstr2);
 }
 
-void enviaStatusBut(void) {
+
+void sendPotControl(void) {
+  char potModeCopy[20];
+  potMode.toCharArray(potModeCopy, 20);
+  MQTT.publish(TOPICO_POT_SEND_CONTROL, potModeCopy);
+}
+
+void sendButtonStatus(void) {
   int num3 = !digitalRead(button);
   char cstr3[16];
   itoa(num3, cstr3, 10);
   MQTT.publish(TOPICO_BUTTON_STATUS, cstr3);
 }
 
-void enviaStatusConn(void) {
+void sendConnectionStatus(void) {
   MQTT.publish(TOPICO_CONNECTION_STATUS, "Connected");
 }
 
 void enviaStatus(void) {
-  enviaStatusConn();
-  enviaStatusLed();
-  enviaStatusPot();
-  enviaStatusBut(); 
+  sendConnectionStatus();
+  sendLedStatus();
+  sendPotStatus();
+  sendPotControl();
+  sendButtonStatus();
 }
 
  
@@ -309,9 +330,9 @@ void enviaStatus(void) {
 void loop() 
 {   
     //garante funcionamento das conexões WiFi e ao broker MQTT
-    VerificaConexoesWiFIEMQTT();
-    verificaLeituraBotao();
-    verificaLeituraPot();
+    verifyConnections();
+    verifyButton();
+    verifyPotReading();
     //keep-alive da comunicação com broker MQTT
     MQTT.loop();
 }
