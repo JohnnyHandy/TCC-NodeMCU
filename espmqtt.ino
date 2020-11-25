@@ -1,9 +1,9 @@
 
-//Programa: NodeMCU e MQTT - Controle e Monitoramento IoT
+//Programa: TCC-NodeMCU
 //Autor: Roger Peixoto Duarte
  
-#include <ESP8266WiFi.h> // Importa a Biblioteca ESP8266WiFi
-#include <PubSubClient.h> // Importa a Biblioteca PubSubClient
+#include <ESP8266WiFi.h> 
+#include <PubSubClient.h> 
 
 
 //defines:
@@ -48,33 +48,33 @@ String potMode = "false"; // Status do modo de escuta de mudanças no potenciome
 
 
 // WIFI
-const char* SSID = "VIVOFIBRA-98C5"; // SSID / nome da rede WI-FI que deseja se conectar
-const char* PASSWORD = "apt1012020"; // Senha da rede WI-FI que deseja se conectar
+const char* SSID = ""; 
+const char* PASSWORD = ""; 
   
 // MQTT
-const char* BROKER_MQTT = "192.168.15.12"; //URL do broker MQTT que se deseja utilizar
-int BROKER_PORT = 1883; // Porta do Broker MQTT
+const char* BROKER_MQTT = "";
+int BROKER_PORT = 1883; 
  
  
 //Variáveis e objetos globais
-WiFiClient espClient; // Cria o objeto espClient
-PubSubClient MQTT(espClient); // Instancia o Cliente MQTT passando o objeto espClient
+WiFiClient espClient; 
+PubSubClient MQTT(espClient); 
   
 //Prototypes
-void initSerial(); //Configura o Baudrate
-void initWiFi(); // Configura conexão com wifi
-void initMQTT(); // Configura conexão MQTT
-void reconectWiFi(); // Usado para reconectar com o wi-fi
-void mqtt_callback(char* topic, byte* payload, unsigned int length); // Prototipo de função que escuta e identifica mensagens MQTT
-void verifyConnections(void); // Verificação de status de conexões Wifi e MQTT
+void initSerial(); 
+void initWiFi(); 
+void initMQTT(); 
+void reconectWiFi(); 
+void mqtt_callback(char* topic, byte* payload, unsigned int length); 
+void verifyConnections(void); 
 void InitOutput(void);
-void verifyPotReading(void); //Verifica leitura do potenciometro caso o modo de escuta esteja ativado
-void verifyButton(void); // Verifica status do "botão"
-void sendLedStatus(void); //Envia o estado do led de teste de status
-void sendPotStatus(void); //Envia o valor atual da conversão analógica-digital da tensao da entrada analogica ligada ao potenciometro
-void sendButtonStatus(void); //Envia o estado do botão de teste
-void sendConnectionStatus(void); //Envia estado da conexão
-void enviaStatus(void); //Envia status geral dos objetos de teste na esp
+void verifyPotReading(void);
+void verifyButton(void); 
+void sendLedStatus(void); 
+void sendPotStatus(void);
+void sendButtonStatus(void); 
+void sendConnectionStatus(void); 
+void sendStatus(void); 
 
 /* 
  *  Implementações das funções
@@ -112,58 +112,46 @@ void initWiFi()
 }
   
 //Função: inicializa parâmetros de conexão MQTT(endereço do 
-//        broker, porta e seta função de callback)
+//        broker, porta e configura função de callback)
 //Parâmetros: nenhum
 //Retorno: nenhum
 void initMQTT() 
 {
-    MQTT.setServer(BROKER_MQTT, BROKER_PORT);   //informa qual broker e porta deve ser conectado
-    MQTT.setCallback(mqtt_callback);            //atribui função de callback (função chamada quando qualquer informação de um dos tópicos subescritos chega)
+    MQTT.setServer(BROKER_MQTT, BROKER_PORT);   
+    MQTT.setCallback(mqtt_callback);          
 }
   
 //Função: função de callback 
 //        esta função é chamada toda vez que uma informação de 
-//        um dos tópicos subescritos chega)
+//        um dos tópicos inscritos chega)
 //Parâmetros: nenhum
 //Retorno: nenhum
 void mqtt_callback(char* topic, byte* payload, unsigned int length) 
 {
     String msg;
- 
-    //obtem a string do payload recebido
+
     for(int i = 0; i < length; i++) 
     {
        char c = (char)payload[i];
        msg += c;
     }
     
-    String receivedTopic = String(topic); //Converte o topico recebido em uma string
+    String receivedTopic = String(topic);
     Serial.print(receivedTopic);
 
     //Toma ação dependendo da string recebida:
-    if(receivedTopic.equals(TOPICO_POT_SET_CONTROL)) { //Ativa o modo de escuta do potenciometro
+    if(receivedTopic.equals(TOPICO_POT_SET_CONTROL)) { 
       potMode=msg;
     }
-    if(receivedTopic.equals(TOPICO_PWMLED_CONTROL)) { //Envia valor analógico à porta de entrada analógica
+    if(receivedTopic.equals(TOPICO_PWMLED_CONTROL)) { 
       controlPwmLed(payload, length);
     }
-    if(receivedTopic.equals(TOPICO_OVERALL_GET_STATUS)) { //Envia o status geral da esp
-      enviaStatus();
+    if(receivedTopic.equals(TOPICO_OVERALL_GET_STATUS)) { 
+      sendStatus();
     }
-    if(receivedTopic.equals(TOPICO_LED_CONTROL)) { //Muda o estado do LED de acordo com a mensagem recebida
+    if(receivedTopic.equals(TOPICO_LED_CONTROL)) { 
       controlStatusLed(msg);
-    }
-//      if (msg.equals("0")) {
-//        digitalWrite(statusLed, LOW);
-//        Serial.print(digitalRead(statusLed));
-//      }
-//      if (msg.equals("1")){
-//        digitalWrite(statusLed, HIGH);
-//        Serial.print(digitalRead(statusLed));
-//      }
-//      sendLedStatus();
-//    }
-     
+    }     
 }
   
 //Função: reconecta-se ao broker MQTT (caso ainda não esteja conectado ou em caso de a conexão cair)
@@ -184,7 +172,6 @@ void reconnectMQTT() {
             MQTT.subscribe(TOPICO_POT_SET_CONTROL);
             MQTT.publish(TOPICO_PRESENCE, "ESP CONECTADA");
             sendConnectionStatus();
-//            MQTT.publish(TOPICO_CONNECTION_STATUS, "Connected");
         } 
         else
         {
@@ -200,12 +187,10 @@ void reconnectMQTT() {
 //Retorno: nenhum
 void reconectWiFi() 
 {
-    //se já está conectado a rede WI-FI, nada é feito. 
-    //Caso contrário, são efetuadas tentativas de conexão
     if (WiFi.status() == WL_CONNECTED)
         return;
          
-    WiFi.begin(SSID, PASSWORD); // Conecta na rede WI-FI
+    WiFi.begin(SSID, PASSWORD);
      
     while (WiFi.status() != WL_CONNECTED) 
     {
@@ -228,12 +213,12 @@ void reconectWiFi()
 void verifyConnections(void)
 {
     if (!MQTT.connected()) 
-        reconnectMQTT(); //se não há conexão com o Broker, a conexão é refeita
+        reconnectMQTT();
      
-     reconectWiFi(); //se não há conexão com o WiFI, a conexão é refeita
+     reconectWiFi();
 }
  
-//Função: inicializa o output em nível lógico baixo
+//Função: inicializa as saídas
 //Parâmetros: nenhum
 //Retorno: nenhum
 void InitOutput(void)
@@ -243,6 +228,10 @@ void InitOutput(void)
     pinMode(statusLed, OUTPUT);
     pinMode(button, INPUT_PULLUP);    
 }
+
+//Função: Controla o estado do Led presente na saída digital
+//Parâmetros: nenhum
+//Retorno: nenhum
 
 void controlStatusLed(String msg) {
     if (msg.equals("0")) {
@@ -256,17 +245,22 @@ void controlStatusLed(String msg) {
     sendLedStatus();
 }
 
+//Função: Função que trata o valor
+//de pwm recebido e ajusta o brilho do led;
+//Parâmetros: a mensagem em byte e o seu tamanho em inteiro
+//Retorno: nenhum
 void controlPwmLed(byte* payload, unsigned int length) {
     char format[16];
     snprintf(format, sizeof format, "%%%ud", length);
-
-    // Converte o valor contigo na mensagem para um valor inteiro
     int payload_value = 0;
     if (sscanf((const char *) payload, format, &payload_value) == 1){
       analogWrite(pwmLed, payload_value);
     } else ;
 }
 
+//Função: Verifica o estado do botão e o envia;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void verifyButton(void) {
   if(digitalRead(button) == LOW) {
     sendButtonStatus();
@@ -277,6 +271,10 @@ void verifyButton(void) {
   }
 }
 
+//Função: Verifica o modo de escuta do potenciômetro
+//        e envia o valor atual da tensão regulada por ele
+//Parâmetros: nenhum
+//Retorno: nenhum
 void verifyPotReading(void){
   if(potMode.equals("true")){
     Serial.print("ADC Value: ");Serial.println(analogRead(A0));
@@ -285,39 +283,57 @@ void verifyPotReading(void){
   }
 }
 
+
+//Função: Envia o estado do led ligado na porta digital;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void sendLedStatus(void) {
-   int num = digitalRead(statusLed);
-  char cstr[16];
-  itoa(num, cstr, 10);
+  int ledStatus = digitalRead(statusLed);
+  char cstr[sizeof(ledStatus)*8+1];
+  itoa(ledStatus, cstr, 10);
   MQTT.publish(TOPICO_LED_SEND_STATUS, cstr);
 }
 
+//Função: Envia o valor da tensão regulada pelo potenciômetro;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void sendPotStatus(void) {
-  int num2 = analogRead(A0);
-  char cstr2[16];
-  itoa(num2, cstr2, 10);
-  MQTT.publish(TOPICO_POT_STATUS, cstr2);
+  int potValue = analogRead(A0);
+  char cstr[sizeof(potValue)*8+1];
+  itoa(potValue, cstr, 10);
+  MQTT.publish(TOPICO_POT_STATUS, cstr);
 }
 
-
+//Função: Envia o estado do modo de escuta do potenciômetro;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void sendPotControl(void) {
   char potModeCopy[20];
   potMode.toCharArray(potModeCopy, 20);
   MQTT.publish(TOPICO_POT_SEND_CONTROL, potModeCopy);
 }
 
+//Função: Envia o estado do botão;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void sendButtonStatus(void) {
-  int num3 = !digitalRead(button);
-  char cstr3[16];
-  itoa(num3, cstr3, 10);
-  MQTT.publish(TOPICO_BUTTON_STATUS, cstr3);
+  int buttonStatus = !digitalRead(button);
+  char cstr[sizeof(buttonStatus*8+1)];
+  itoa(buttonStatus, cstr, 10);
+  MQTT.publish(TOPICO_BUTTON_STATUS, cstr);
 }
 
+//Função: Envia o estado da conexão da ESP;
+//Parâmetros: nenhum
+//Retorno: nenhum
 void sendConnectionStatus(void) {
   MQTT.publish(TOPICO_CONNECTION_STATUS, "Connected");
 }
 
-void enviaStatus(void) {
+//Função: Envia o estadao geral das saídas e da conexão;
+//Parâmetros: nenhum
+//Retorno: nenhum
+void sendStatus(void) {
   sendConnectionStatus();
   sendLedStatus();
   sendPotStatus();
@@ -329,10 +345,9 @@ void enviaStatus(void) {
 //programa principal
 void loop() 
 {   
-    //garante funcionamento das conexões WiFi e ao broker MQTT
+
     verifyConnections();
     verifyButton();
     verifyPotReading();
-    //keep-alive da comunicação com broker MQTT
     MQTT.loop();
 }
